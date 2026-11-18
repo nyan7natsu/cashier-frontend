@@ -399,6 +399,24 @@ export class App {
         ),
       );
     }
+    items.push(
+      h(
+        "div",
+        { class: `drawer__note${pwa.offline === "unsupported" || pwa.offline === "dev" ? " is-warn" : ""}` },
+        "オフライン",
+        h(
+          "span",
+          null,
+          pwa.offline === "ready"
+            ? "使えます"
+            : pwa.offline === "preparing"
+              ? "準備中…"
+              : pwa.offline === "dev"
+                ? "使えません（開発モード）"
+                : "使えません（https で開いてください）",
+        ),
+      ),
+    );
     if (!pwa.installed && (pwa.canPrompt || pwa.isIOS)) {
       items.push(
         h(

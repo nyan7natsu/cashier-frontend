@@ -1,36 +1,9 @@
 import type { App } from "../app.ts";
 import { h, tick, toast } from "../dom.ts";
-import { describeTally, makeChange, tallyTotal, yen, type Denom } from "../money.ts";
+import { makeChange, tallyTotal, yen, type Denom } from "../money.ts";
+import { changeChips, moneyIcon } from "../money-view.ts";
 import { config } from "../config.ts";
 import { confirmSale } from "../sale.ts";
-
-/** お金のアイコン。色と大きさを実物に寄せる */
-const MONEY: Record<Denom, { kind: "bill" | "coin"; color: string; size?: number; hole?: boolean; text: string }> = {
-  10000: { kind: "bill", color: "#7a6440", text: "壱万" },
-  5000: { kind: "bill", color: "#6a4f86", text: "五千" },
-  2000: { kind: "bill", color: "#4f7a5a", text: "弐千" },
-  1000: { kind: "bill", color: "#3f6f9a", text: "千" },
-  500: { kind: "coin", color: "#d4b04a", size: 30, text: "500" },
-  100: { kind: "coin", color: "#c4c4c4", size: 26, text: "100" },
-  50: { kind: "coin", color: "#d6d6d6", size: 24, hole: true, text: "" },
-  10: { kind: "coin", color: "#b5703f", size: 27, text: "10" },
-  5: { kind: "coin", color: "#c9a43a", size: 25, hole: true, text: "" },
-  1: { kind: "coin", color: "#e4e4e4", size: 22, text: "1" },
-};
-
-export function moneyIcon(d: Denom): HTMLElement {
-  const m = MONEY[d];
-  if (m.kind === "bill") return h("span", { class: "bill", style: `background:${m.color}`, "aria-hidden": "true" }, m.text);
-  return h(
-    "span",
-    {
-      class: `coin${m.hole ? " coin--hole" : ""}`,
-      style: `background:${m.color};width:${m.size}px;height:${m.size}px;${d === 10 ? "color:#fff" : ""}`,
-      "aria-hidden": "true",
-    },
-    m.text,
-  );
-}
 
 const GRID: readonly Denom[] = [10000, 5000, 1000, 500, 100, 50, 10, 5, 1];
 
@@ -68,7 +41,7 @@ export function renderPayment(app: App): HTMLElement {
   const changeLabel = h("span", { class: "row__label" });
   const changeValue = h("span", { class: "row__value num" });
   const changeBox = h("div", { class: "change" }, h("div", { class: "row" }, changeLabel, changeValue));
-  const changeDetail = h("div", { class: "change__detail muted" });
+  const changeDetail = h("div", { class: "give-chips" });
   // 値引きは今回ほぼ使わないので、設定で出したときだけ見せる
   const discountButton = h("button", { class: "link pay__discount", hidden: !config.showDiscount, onclick: () => openDiscount() });
 
@@ -135,8 +108,8 @@ export function renderPayment(app: App): HTMLElement {
     changeBox.classList.toggle("is-short", short);
     changeLabel.textContent = short ? "あと" : "おつり";
     changeValue.textContent = yen(short ? total - deposit : deposit - total);
-    const back = short ? "" : describeTally(makeChange(deposit - total));
-    changeDetail.textContent = back ? `返す: ${back}` : "";
+    const chips = short ? [] : changeChips(makeChange(deposit - total));
+    changeDetail.replaceChildren(...(chips.length > 0 ? [h("span", { class: "give-chips__label" }, "返す"), ...chips] : []));
 
     if (app.register === "closed") {
       confirm.textContent = "閉局中は確定できません";

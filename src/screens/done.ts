@@ -1,7 +1,8 @@
 import type { App } from "../app.ts";
 import { config } from "../config.ts";
 import { h } from "../dom.ts";
-import { describeTally, yen } from "../money.ts";
+import { yen } from "../money.ts";
+import { changeList } from "../money-view.ts";
 
 export function renderDone(app: App): HTMLElement {
   const key = app.lastSaleKey;
@@ -12,7 +13,6 @@ export function renderDone(app: App): HTMLElement {
   }
 
   const changeAmount = first.deposit - first.total;
-  const back = describeTally(first.change);
 
   const head = h("div", { style: "display:contents" });
   const next = h("button", { class: "btn btn--primary", onclick: () => goNext() });
@@ -85,9 +85,9 @@ export function renderDone(app: App): HTMLElement {
     head,
     h(
       "div",
-      { class: "change" },
+      { class: `change change--done${changeAmount === 0 ? " is-none" : ""}` },
       h("div", { class: "row" }, h("span", { class: "row__label" }, "おつり"), h("span", { class: "row__value num" }, yen(changeAmount))),
-      back ? h("div", { class: "change__detail" }, back) : null,
+      changeAmount > 0 ? changeList(first.change) : h("p", { class: "give__none" }, "おつりはありません"),
     ),
     h("div", { class: "row row--small", style: "align-self:stretch" }, h("span", { class: "row__label" }, "合計"), h("span", { class: "row__value num" }, yen(first.total))),
     h("div", { class: "row row--small", style: "align-self:stretch" }, h("span", { class: "row__label" }, "預かり"), h("span", { class: "row__value num" }, yen(first.deposit))),

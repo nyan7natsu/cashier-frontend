@@ -10,6 +10,18 @@ export const pwa = {
   needRefresh: false,
   /** Android の Chrome で「インストール」を出せる */
   canPrompt: false,
+  /**
+   * オフラインで使えるか。
+   * - "dev": Vite の開発サーバーで動いている（service worker を作らない）
+   * - "unsupported": http で開いているなどで、ブラウザが service worker を使わせない
+   * - "preparing": 保存の途中
+   * - "ready": オフラインでも開ける
+   */
+  offline: (import.meta.env.DEV ? "dev" : "serviceWorker" in navigator ? "preparing" : "unsupported") as
+    | "dev"
+    | "unsupported"
+    | "preparing"
+    | "ready",
   /** 状態が変わったら呼ぶ（メニューの描き直しなど） */
   onChange: () => {},
 
@@ -58,11 +70,24 @@ window.addEventListener("appinstalled", () => {
 });
 
 const updateSW = registerSW({
+  onOfflineReady() {
+    pwa.offline = "ready";
+    pwa.onChange();
+  },
+  onRegisterError() {
+    pwa.offline = "unsupported";
+    pwa.onChange();
+  },
   onNeedRefresh() {
     pwa.needRefresh = true;
     pwa.onChange();
   },
   onRegisteredSW(_url, registration) {
+    // すでに保存済みで開き直したときは onOfflineReady が来ないので、ここで ready にする
+    if (registration?.active) {
+      pwa.offline = "ready";
+      pwa.onChange();
+    }
     // 開きっぱなしで使うので、ときどき新しい版がないか見に行く
     if (registration) window.setInterval(() => void registration.update().catch(() => undefined), UPDATE_CHECK_MS);
   },

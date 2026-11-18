@@ -38,10 +38,3 @@ export function toCashCount(tender: Tally, change: Tally): CashCount {
 export function yen(n: number): string {
   return `¥${n.toLocaleString("ja-JP")}`;
 }
-
-/** 「500円×1　100円×4」の形にする */
-export function describeTally(t: Tally): string {
-  return DENOMS.filter((d) => t[d] > 0)
-    .map((d) => `${d.toLocaleString("ja-JP")}円×${t[d]}`)
-    .join("　");
-}
