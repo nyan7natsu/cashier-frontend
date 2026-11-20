@@ -4,9 +4,18 @@ import { yen } from "../money.ts";
 
 export function renderProducts(app: App): HTMLElement {
   const rows = new Map<number, { row: HTMLElement; qty: HTMLElement }>();
-  const list = h("div", { class: "items" });
+  // 縦向きの 1 列・2 列は設定で切り替える。横向きでは CSS でカテゴリーごとの列になる
+  const list = h("div", { class: `items items--${app.layout}` });
 
-  for (const p of app.products) {
+  // 紙のオーダー表に合わせて、category ごとにまとめて見出しを付ける
+  let rowsBox: HTMLElement | null = null;
+  let category: string | undefined;
+  app.products.forEach((p, i) => {
+    if (i === 0 || p.category !== category) {
+      category = p.category;
+      rowsBox = h("div", { class: "cat__rows" });
+      list.append(h("section", { class: "cat" }, category ? h("h2", { class: "items__group" }, category) : null, rowsBox));
+    }
     const qty = h("span", { class: "item__qty num" });
     const row = h(
       "div",
@@ -25,8 +34,8 @@ export function renderProducts(app: App): HTMLElement {
       ),
     );
     rows.set(p.id, { row, qty });
-    list.append(row);
-  }
+    rowsBox!.append(row);
+  });
 
   if (app.products.length === 0) {
     list.append(
@@ -138,5 +147,5 @@ export function renderProducts(app: App): HTMLElement {
   }
 
   refreshAll();
-  return h("div", { class: "screen" }, list, foot);
+  return h("div", { class: "screen screen--products" }, list, foot);
 }

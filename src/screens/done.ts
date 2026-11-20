@@ -46,14 +46,11 @@ export function renderDone(app: App): HTMLElement {
                     : "送信待ち",
               );
 
+    // レシート番号は出さない（あとで探すときは「会計の記録」で見られる）
     head.replaceChildren(
       h(
         "div",
         { class: "done__head" },
-        h("span", { class: "done__label" }, "レシート番号"),
-      sale.receiptId !== undefined
-        ? h("span", { class: "done__receipt num" }, String(sale.receiptId))
-        : h("span", { class: "done__receipt is-pending" }, "—"),
       chip,
       sale.error && sale.status !== "sent" ? h("p", { class: "done__error" }, sale.error) : null,
       sale.status === "pending" && tried
@@ -64,8 +61,11 @@ export function renderDone(app: App): HTMLElement {
 
     // 待つ設定のときは、一度送ってみるまで次へ進ませない。
     // 前の会計が送れずに送信待ちが止まっているときは、待っても進まないので次へ進ませる
+    // オフラインと分かっているときも、待っても届かないので次へ進ませる
     const waiting =
-      config.waitForSend && (sale.status === "sending" || (sale.status === "pending" && !tried && app.queue.busy));
+      config.waitForSend &&
+      app.register !== "offline" &&
+      (sale.status === "sending" || (sale.status === "pending" && !tried && app.queue.busy));
     canLeave = !waiting;
     if (waiting) {
       next.textContent = "送信中…";

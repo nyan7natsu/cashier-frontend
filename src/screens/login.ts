@@ -51,10 +51,11 @@ export function renderLogin(app: App): HTMLElement {
         if (r.ok) {
           app.setPassword(pw);
           app.setRegister("unknown");
-          await app.afterLogin();
+          app.afterLogin();
           return;
         }
-        error.textContent = describeFailure(r);
+        error.textContent =
+          r.kind === "network" ? "オフラインのため、パスワードを確かめられません" : describeFailure(r);
         input.select();
       },
     },

@@ -15,4 +15,13 @@ export const config = {
 
   /** 預かり画面に「値引き」ボタンを出すか */
   showDiscount: false,
-} as const;
+
+  /**
+   * レジのお金が、この枚数を下回ったら「残り少」と出す。
+   * ふだんはサーバーの閾値（/api/cash/threshold）を使い、まだ一度も取れていないときだけこれを使う
+   */
+  lowStock: { 1000: 10, 500: 5, 100: 15, 50: 5 } as Partial<Record<number, number>>,
+
+  /** 商品一覧（売り止めなど）を読み直す間隔 */
+  productRefreshMs: 60_000,
+};

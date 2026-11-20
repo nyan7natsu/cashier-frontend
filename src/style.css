@@ -201,6 +201,7 @@ input:focus-visible {
 
 .band__operator {
   height: 44px;
+  min-width: 4em;
   padding: 0 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -360,22 +361,37 @@ input:focus-visible {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px var(--gutter) 16px;
+  padding: 6px var(--gutter) 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   overscroll-behavior: contain;
 }
 
-.items__gap {
-  height: 10px;
-  flex-shrink: 0;
+.cat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cat__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.items__group {
+  margin: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .item {
   display: flex;
   align-items: stretch;
-  min-height: 60px;
+  min-height: 46px;
   flex-shrink: 0;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -384,11 +400,11 @@ input:focus-visible {
 }
 
 .item__minus {
-  width: 56px;
+  width: 46px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  font-size: 24px;
+  font-size: 22px;
   color: var(--faint);
   border-right: 1px dashed var(--border-strong);
 }
@@ -398,35 +414,37 @@ input:focus-visible {
   min-width: 0;
   display: flex;
   align-items: center;
-  text-align: center;
+  text-align: left;
 }
 
+/* 名前のすぐ右に、小さく値段を置く */
 .item__name {
   flex: 1;
   min-width: 0;
-  padding: 6px 4px;
+  padding: 4px 4px 4px 12px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: baseline;
+  gap: 8px;
   line-height: 1.25;
 }
 
 .item__main {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .item__sub {
   font-size: 13px;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 .item__qty {
-  width: 56px;
+  width: 46px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  font-size: 22px;
+  font-size: 20px;
   color: var(--faint);
 }
 
@@ -446,7 +464,7 @@ input:focus-visible {
 }
 
 .item.is-on .item__qty {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--accent-text);
 }
@@ -454,6 +472,55 @@ input:focus-visible {
 .item__minus:active,
 .item__plus:active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* 2 列（設定）: 幅が半分になるので、選んでいないときは − と ＋ を出さず、値段を右端に置く */
+.items--two .cat__rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.items--two .item {
+  min-height: 50px;
+}
+
+.items--two .item:not(.is-on) .item__minus,
+.items--two .item:not(.is-on) .item__qty {
+  display: none;
+}
+
+.items--two .item__minus,
+.items--two .item__qty {
+  width: 32px;
+  font-size: 18px;
+}
+
+.items--two .item.is-on .item__qty {
+  font-size: 20px;
+}
+
+.items--two .item__name {
+  padding: 4px 8px 4px 10px;
+  justify-content: space-between;
+}
+
+.items--two .item.is-on .item__name {
+  padding-left: 6px;
+}
+
+.items--two .item__main {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.items--two .item__sub {
+  font-size: 12px;
+}
+
+/* 選んだときは − と個数が出て狭くなるので、値段を隠して名前に幅を回す */
+.items--two .item.is-on .item__sub {
+  display: none;
 }
 
 /* ---------- 下部のバー ---------- */
@@ -816,7 +883,7 @@ input:focus-visible {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 24px var(--gutter) 12px;
+  padding: 14px var(--gutter) 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -866,7 +933,11 @@ input:focus-visible {
 
 .done .change {
   align-self: stretch;
-  margin-top: 16px;
+  margin-top: 4px;
+}
+
+.done .change .row__value {
+  font-size: 52px;
 }
 
 .done__error {
@@ -1250,4 +1321,339 @@ dialog::backdrop {
 .drawer__note.is-warn span {
   color: var(--warn);
   font-weight: 600;
+}
+
+/* ---------- レジのお金 ---------- */
+
+.denom__left {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+  line-height: 1;
+}
+
+.denom__left.is-low {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.cash-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.cash-note:empty {
+  display: none;
+}
+
+.cash-note.is-warn {
+  color: var(--warn);
+}
+
+.cash-note.is-ng {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.warn-text {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.give__row.is-low {
+  box-shadow: inset 0 0 0 1.5px var(--warn);
+}
+
+.give__row.is-low .give__count {
+  color: var(--warn);
+}
+
+.give__row.is-high {
+  box-shadow: inset 0 0 0 1.5px var(--ok);
+}
+
+.give__row.is-high .give__count {
+  color: var(--ok);
+}
+
+.give__tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: 2px;
+  border: 1px solid currentColor;
+}
+
+.give__row.is-low .give__tag {
+  color: var(--warn);
+}
+
+.give__row.is-high .give__tag {
+  color: var(--ok);
+}
+
+/* ---------- 預かり（キーパッド） ---------- */
+
+.pay__depositbox {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.pay__deposit.is-exact {
+  color: var(--muted);
+}
+
+.pay__clear {
+  min-height: 32px;
+  font-size: 14px;
+}
+
+.pay__received {
+  font-size: 15px;
+}
+
+.pay__fix {
+  min-height: 32px;
+  font-size: 14px;
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.keys {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px var(--gutter) 2px;
+}
+
+.key {
+  min-height: 52px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 24px;
+  font-weight: 600;
+  transition: transform 0.06s ease;
+}
+
+.key:active {
+  transform: scale(0.97);
+  background: var(--surface-2);
+}
+
+.key--back {
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.sheet--wide {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+}
+
+/* ---------- 横向き ---------- */
+
+@media (orientation: landscape) and (min-width: 600px) {
+  #app {
+    max-width: none;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* 商品: カテゴリーごとに 1 列ずつ並べ、合計とボタンを右に置く */
+  .screen--products {
+    flex-direction: row;
+  }
+
+  .screen--products .items {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .screen--products .cat {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .screen--products .cat__rows {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 列が細いので、2 列設定と同じく − と ＋ は選んだときだけ出す */
+  .screen--products .item {
+    min-height: 46px;
+  }
+
+  .screen--products .item:not(.is-on) .item__minus,
+  .screen--products .item:not(.is-on) .item__qty {
+    display: none;
+  }
+
+  .screen--products .item.is-on .item__minus,
+  .screen--products .item.is-on .item__qty {
+    display: grid;
+  }
+
+  .screen--products .item__minus,
+  .screen--products .item__qty {
+    width: 32px;
+    font-size: 18px;
+  }
+
+  .screen--products .item.is-on .item__qty {
+    font-size: 20px;
+  }
+
+  .screen--products .item__name {
+    padding: 4px 8px 4px 10px;
+    justify-content: space-between;
+  }
+
+  .screen--products .item.is-on .item__name {
+    padding-left: 6px;
+  }
+
+  .screen--products .item__main {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .screen--products .item__sub {
+    font-size: 12px;
+  }
+
+  .screen--products .item.is-on .item__sub {
+    display: none;
+  }
+
+  .screen--products .foot {
+    width: 220px;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+    justify-content: flex-end;
+  }
+
+  .screen--products .foot__sum {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .screen--products .foot__total {
+    font-size: 30px;
+  }
+
+  .screen--products .foot__actions {
+    flex-direction: column;
+  }
+
+  .screen--products .lines {
+    max-height: none;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* 預かり: 左にキーパッド、右に金額と確定 */
+  .screen--payment {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .screen--payment .keys {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    grid-auto-rows: minmax(0, 1fr);
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom)) var(--gutter);
+  }
+
+  .screen--payment .key {
+    min-height: 0;
+  }
+
+  .screen--payment .pay {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 2px;
+    padding-top: 0;
+  }
+
+  /* 高さが足りないので、金額の文字と行の間を詰める */
+  .screen--payment .pay__nav .link,
+  .screen--payment .pay__clear,
+  .screen--payment .pay__fix {
+    min-height: 30px;
+  }
+
+  .screen--payment .row {
+    min-height: 0;
+  }
+
+  .screen--payment .row__value {
+    font-size: 24px;
+  }
+
+  .screen--payment .row--small .row__value {
+    font-size: 16px;
+  }
+
+  .screen--payment .change {
+    padding: 4px 12px;
+  }
+
+  .screen--payment .change .row__value {
+    font-size: 32px;
+  }
+
+  .screen--payment .give-chips {
+    min-height: 26px;
+    font-size: 14px;
+  }
+
+  .screen--payment .foot {
+    grid-column: 2;
+    grid-row: 2;
+    border-top: 0;
+  }
+}
+
+/* 縦が短いスマホ（SE など）では、キーと金額を少し小さくして 1 画面に収める */
+@media (orientation: portrait) and (max-height: 700px) {
+  .key {
+    min-height: 44px;
+    font-size: 22px;
+  }
+
+  .screen--payment .pay {
+    gap: 4px;
+  }
+
+  .screen--payment .pay__nav .link {
+    min-height: 32px;
+  }
+
+  .screen--payment .row__value {
+    font-size: 26px;
+  }
+
+  .screen--payment .row--small .row__value {
+    font-size: 16px;
+  }
+
+  .screen--payment .change {
+    padding: 4px 12px;
+  }
+
+  .screen--payment .change .row__value {
+    font-size: 34px;
+  }
 }

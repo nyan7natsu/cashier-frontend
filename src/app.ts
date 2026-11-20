@@ -1,19 +1,23 @@
-import { api, type Operator, type Product } from "./api.ts";
+import { api, describeFailure, type CashThreshold, type Operator, type Product } from "./api.ts";
 import { h, toast } from "./dom.ts";
-import { emptyTally, type Tally } from "./money.ts";
+import { config } from "./config.ts";
+import { addTally, DENOMS, emptyTally, fromCashCount, planChange, type ChangePlan, type Denom, type Tally } from "./money.ts";
 import { pwa } from "./pwa.ts";
 import { SaleQueue, type SendOutcome } from "./queue.ts";
 import { load, save } from "./storage.ts";
 import { renderDone } from "./screens/done.ts";
+import { renderDrawer } from "./screens/drawer.ts";
 import { renderHistory } from "./screens/history.ts";
 import { renderLogin } from "./screens/login.ts";
 import { renderOperator } from "./screens/operator.ts";
 import { renderPayment } from "./screens/payment.ts";
 import { renderProducts } from "./screens/products.ts";
 
-export type Screen = "login" | "operator" | "products" | "payment" | "done" | "history";
+export type Screen = "login" | "operator" | "products" | "payment" | "done" | "history" | "drawer";
 export type RegisterState = "unknown" | "open" | "closed" | "offline" | "unauthorized";
 export type Theme = "auto" | "dark" | "light";
+/** 商品の並べ方（縦向きのとき）。横向きでは、カテゴリーごとの列になる */
+export type Layout = "one" | "two";
 
 const STATUS_INTERVAL_MS = 10_000;
 
@@ -22,9 +26,17 @@ export class App {
   operators: Operator[] = parseJson<Operator[]>(load("operators")) ?? [];
   operatorId: string | null = load("operator");
   products: Product[] = parseJson<Product[]>(load("products")) ?? [];
+  /** サーバーが記録しているレジのお金（最後に取れたもの） */
+  serverCash: Tally | null = parseJson<Tally>(load("cash"));
+  /** サーバーが決めている金種ごとの閾値（最後に取れたもの） */
+  cashThreshold: CashThreshold | null = parseJson<CashThreshold>(load("cash_threshold"));
 
   cart = new Map<number, number>();
   tender: Tally = emptyTally();
+  /** キーパッドで打った預かり金額。空なら「ちょうど」として扱う */
+  tenderInput = "";
+  /** 受け取ったお金の内訳を、推定ではなく手で直したか */
+  tenderEdited = false;
   discount = 0;
   /** 確定後の画面に出している会計 */
   lastSaleKey: string | null = null;
@@ -43,6 +55,9 @@ export class App {
   private main: HTMLElement;
   private menu: HTMLDialogElement;
   private statusTimer: number | undefined;
+  private lastProductRefresh = Date.now();
+  /** 直前の読み直しで、売り止めの商品を外したか（知らせを上書きしないため） */
+  private droppedFromCart = false;
 
   constructor(root: HTMLElement) {
     this.band = h("header", { class: "band" });
@@ -78,29 +93,75 @@ export class App {
 
   async start(): Promise<void> {
     const fromUrl = takePasswordFromUrl();
-    const candidate = fromUrl ?? this.password;
-    if (!candidate) return this.go("login");
 
-    const r = await api.auth(candidate);
-    if (r.ok) {
-      this.setPassword(candidate);
-      await this.afterLogin();
-    } else if (r.kind === "http" && r.status === 401) {
-      this.setPassword(null);
-      this.loginError = fromUrl ? "URL のパスワードが違います" : "パスワードが変わりました。入れ直してください";
-      this.go("login");
+    // 保存してあるパスワードで始めるときは、サーバーの返事を待たずに前回のデータで画面を出す。
+    // オフラインだと返事が来るまで何秒もかかるため。パスワードの確認は裏で行う
+    if (!fromUrl && this.password) {
+      this.afterLogin();
+      void this.verifyPassword(this.password);
+      return;
+    }
+
+    if (!fromUrl) return this.go("login");
+
+    // URL から新しいパスワードを受け取ったときは、正しいか確かめてから使う
+    const r = await api.auth(fromUrl);
+    if (r.ok || r.kind === "network" || (r.kind === "http" && r.status >= 500)) {
+      // オフラインなら確かめようがないので、そのまま使う（違っていれば、つながったときに 401 で分かる）
+      this.setPassword(fromUrl);
+      if (!r.ok) this.setRegister("offline");
+      this.afterLogin();
+    } else if (r.status === 401) {
+      if (this.password) {
+        // 前のパスワードがあれば、それで続ける
+        toast("URL のパスワードが違います。前のパスワードで続けます");
+        this.afterLogin();
+        void this.verifyPassword(this.password);
+      } else {
+        this.loginError = "URL のパスワードが違います";
+        this.go("login");
+      }
     } else {
-      // つながらないときは、保存してあるパスワードと商品で始める
-      this.setPassword(candidate);
-      this.register = "offline";
-      await this.afterLogin();
+      this.loginError = describeFailure(r);
+      this.go("login");
     }
   }
 
-  async afterLogin(): Promise<void> {
+  /** 保存してあるパスワードが今も使えるか、裏で確かめる */
+  private async verifyPassword(pw: string): Promise<void> {
+    const r = await api.auth(pw);
+    if (this.password !== pw) return;
+    if (r.ok) return;
+    if (r.kind === "http" && r.status === 401) {
+      this.setRegister("unauthorized");
+      // 会計の途中でなければ、すぐにパスワードの画面を出す
+      if (this.cart.size === 0 && (this.screen === "products" || this.screen === "operator")) {
+        this.loginError = "パスワードが変わりました。入れ直してください";
+        this.askPassword();
+      }
+    } else if (r.kind === "network") {
+      this.setRegister("offline");
+    }
+  }
+
+  /** 画面を出す。担当者と商品は、前回の分があれば待たずに使い、裏で読み直す */
+  afterLogin(): void {
     this.loginError = "";
-    await this.loadMaster();
+    const hasCache = this.products.length > 0 && this.operators.length > 0;
+    const loading = this.loadMaster();
     this.startStatusPolling();
+    if (hasCache) {
+      this.showNext();
+      void loading.then((changed) => {
+        // 商品や担当者が変わっていたら描き直す（選んでいる商品はそのまま）
+        if (changed && (this.screen === "products" || this.screen === "operator")) this.go(this.screen);
+      });
+    } else {
+      void loading.then(() => this.showNext());
+    }
+  }
+
+  private showNext(): void {
     const back = this.returnTo;
     this.returnTo = "products";
     if (!this.operator) {
@@ -111,22 +172,47 @@ export class App {
     }
   }
 
-  /** 担当者と商品を読み込む。つながらなければ前回の分を使う */
-  async loadMaster(): Promise<void> {
-    if (!this.password) return;
-    const [ops, prods] = await Promise.all([api.operators(this.password), api.products(this.password)]);
+  /**
+   * 担当者と商品を読み込む。読めなければ前回の分を使う。
+   * 前回から変わったかどうかを返す
+   */
+  async loadMaster(): Promise<boolean> {
+    if (!this.password) return false;
+    const before = JSON.stringify([this.operators, this.products]);
+    const [ops, prods, threshold] = await Promise.all([
+      api.operators(this.password),
+      api.products(this.password),
+      api.cashThreshold(this.password),
+    ]);
+    if (threshold.ok) {
+      this.cashThreshold = threshold.data;
+      save("cash_threshold", JSON.stringify(threshold.data));
+    }
     if (ops.ok) {
       this.operators = ops.data.operators;
       save("operators", JSON.stringify(this.operators));
     }
     if (prods.ok) {
-      this.products = prods.data.products;
+      this.products = prods.data.products.filter((p) => p.enabled !== false);
       save("products", JSON.stringify(this.products));
+      this.dropUnavailable();
     }
     if (!ops.ok || !prods.ok) {
       if (ops.ok === false && ops.kind === "http" && ops.status === 401) this.setRegister("unauthorized");
-      else if (this.products.length > 0) toast("つながらないので、前回の商品一覧を使います");
+      else if (ops.ok === false && ops.kind === "network") this.setRegister("offline");
     }
+    return JSON.stringify([this.operators, this.products]) !== before;
+  }
+
+  /** 売り止めになって一覧から消えた商品を、選んでいる商品から外す */
+  private dropUnavailable(): void {
+    const removed = [...this.cart.keys()].filter((id) => !this.products.some((p) => p.id === id));
+    if (removed.length === 0) return;
+    for (const id of removed) this.cart.delete(id);
+    this.droppedFromCart = true;
+    toast("売り止めになった商品を、選んでいる商品から外しました");
+    if (this.screen === "payment" && this.cart.size === 0) this.go("products");
+    else if (this.screen === "payment") this.go("payment");
   }
 
   // ---------- 画面の切り替え ----------
@@ -150,6 +236,8 @@ export class App {
           return renderDone(this);
         case "history":
           return renderHistory(this);
+        case "drawer":
+          return renderDrawer(this);
       }
     })();
     this.main.replaceChildren(view);
@@ -185,6 +273,14 @@ export class App {
     if (pw) this.queue.resume();
   }
 
+  get layout(): Layout {
+    return load("layout") === "two" ? "two" : "one";
+  }
+
+  set layout(l: Layout) {
+    save("layout", l === "one" ? null : l);
+  }
+
   get theme(): Theme {
     const t = load("theme");
     return t === "dark" || t === "light" ? t : "auto";
@@ -203,12 +299,63 @@ export class App {
     this.stateChanged();
   }
 
+  /**
+   * レジのお金の目安。サーバーの記録に、この端末でまだ送れていない会計の分を足したもの。
+   * ほかの端末の送信待ちは入らない。サーバーから一度も取れていなければ null
+   */
+  get drawer(): Tally | null {
+    if (!this.serverCash) return null;
+    let t = this.serverCash;
+    for (const r of this.queue.pending) t = addTally(t, fromCashCount(r.payload.cash_count));
+    return t;
+  }
+
+  /** 今の預かりでのおつりの組み方。預かったお金もおつりに使える */
+  planChange(amount: number): ChangePlan {
+    const d = this.drawer;
+    return planChange(amount, d ? addTally(d, this.tender) : null);
+  }
+
+  /**
+   * 残りが少ない金種。サーバーの閾値（near_empty 以下）で判定する。
+   * 閾値をまだ取れていなければ config.lowStock を使う
+   */
+  get lowStock(): { denom: Denom; count: number }[] {
+    const d = this.drawer;
+    if (!d) return [];
+    const t = this.cashThreshold;
+    const limit = (denom: Denom): number | null => {
+      if (t) {
+        const v = t.near_empty[`yen_${denom}`];
+        return typeof v === "number" && v >= 0 ? v : null;
+      }
+      const v = config.lowStock[denom];
+      // config の値は「この枚数を下回ったら」なので、以下の比較に合わせて 1 引く
+      return typeof v === "number" ? v - 1 : null;
+    };
+    return DENOMS.flatMap((denom) => {
+      const l = limit(denom);
+      return l !== null && d[denom] <= l ? [{ denom, count: d[denom] }] : [];
+    });
+  }
+
+  /** 多すぎる金種（near_full 以上）。金庫へ移す目安 */
+  get highStock(): { denom: Denom; count: number }[] {
+    const d = this.drawer;
+    const t = this.cashThreshold;
+    if (!d || !t) return [];
+    return DENOMS.flatMap((denom) => {
+      const v = t.near_full[`yen_${denom}`];
+      return typeof v === "number" && v >= 0 && d[denom] >= v ? [{ denom, count: d[denom] }] : [];
+    });
+  }
+
   /** 閉局中とパスワード切れのときは、会計を確定させない */
   get canConfirm(): boolean {
     return this.register !== "closed" && this.register !== "unauthorized";
   }
 
-  private stateChanged(): void {
+  stateChanged(): void {
     this.renderBand();
     this.onStateChange?.();
   }
@@ -253,6 +400,8 @@ export class App {
   resetSale(): void {
     this.cart.clear();
     this.tender = emptyTally();
+    this.tenderInput = "";
+    this.tenderEdited = false;
     this.discount = 0;
   }
 
@@ -265,9 +414,10 @@ export class App {
 
     const label: Record<RegisterState, string> = {
       unknown: "確認中…",
-      open: "開局中",
+      open: "オンライン",
+      // 閉局中かどうかはオンラインのときしか分からないので、「オンライン」は付けない
       closed: "閉局中",
-      offline: "つながっていません",
+      offline: "オフライン",
       unauthorized: "パスワードを入れ直す",
     };
 
@@ -314,6 +464,19 @@ export class App {
   // ---------- メニュー ----------
 
   openMenu(): void {
+    const layoutButton = (l: Layout, text: string) =>
+      h(
+        "button",
+        {
+          "aria-pressed": String(this.layout === l),
+          onclick: () => {
+            this.layout = l;
+            if (this.screen === "products") this.go("products");
+            this.openMenu();
+          },
+        },
+        text,
+      );
     const themeButton = (t: Theme, text: string) =>
       h(
         "button",
@@ -357,13 +520,32 @@ export class App {
       ),
       h(
         "button",
+        { class: "drawer__item", onclick: () => this.go("drawer") },
+        "レジのお金",
+        h(
+          "span",
+          { class: this.lowStock.length + this.highStock.length > 0 ? "warn-text" : "muted" },
+          [
+            this.lowStock.length > 0 ? `残り少 ${this.lowStock.length}` : "",
+            this.highStock.length > 0 ? `多い ${this.highStock.length}` : "",
+          ]
+            .filter(Boolean)
+            .join("・"),
+        ),
+      ),
+      h(
+        "button",
         {
           class: "drawer__item",
           onclick: async () => {
             this.menu.close();
+            this.lastProductRefresh = Date.now();
+            this.droppedFromCart = false;
             await this.loadMaster();
             if (this.screen === "products") this.go("products");
-            toast("商品と担当者を読み直しました");
+            if (!this.droppedFromCart) {
+              toast(this.register === "offline" ? "オフラインなので、前回の一覧のままです" : "商品と担当者を読み直しました");
+            }
           },
         },
         "商品を読み直す",
@@ -371,6 +553,8 @@ export class App {
       ...this.appItems(),
       h("div", { class: "drawer__section" }, "表示"),
       h("div", { class: "segmented" }, themeButton("auto", "自動"), themeButton("dark", "暗"), themeButton("light", "明")),
+      h("div", { class: "drawer__section" }, "商品の並べ方（縦向き）"),
+      h("div", { class: "segmented" }, layoutButton("one", "1 列"), layoutButton("two", "2 列")),
       h(
         "div",
         { class: "drawer__foot" },
@@ -463,9 +647,25 @@ export class App {
   async checkStatus(): Promise<void> {
     if (!this.password) return;
     const r = await api.status(this.password);
-    if (r.ok) this.setRegister(r.data.is_open ? "open" : "closed");
-    else if (r.kind === "http" && r.status === 401) this.setRegister("unauthorized");
+    if (r.ok) {
+      this.setRegister(r.data.is_open ? "open" : "closed");
+      this.setServerCash(r.data.cash_count ? fromCashCount(r.data.cash_count) : null);
+      // 売り止めを反映するため、ときどき商品一覧も読み直す
+      if (Date.now() - this.lastProductRefresh >= config.productRefreshMs) {
+        this.lastProductRefresh = Date.now();
+        void this.loadMaster().then((changed) => {
+          if (changed && this.screen === "products") this.go("products");
+        });
+      }
+    } else if (r.kind === "http" && r.status === 401) this.setRegister("unauthorized");
     else this.setRegister("offline");
+  }
+
+  private setServerCash(cash: Tally | null): void {
+    if (!cash || JSON.stringify(cash) === JSON.stringify(this.serverCash)) return;
+    this.serverCash = cash;
+    save("cash", JSON.stringify(cash));
+    this.stateChanged();
   }
 }
 

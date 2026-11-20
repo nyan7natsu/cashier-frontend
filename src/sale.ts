@@ -1,6 +1,6 @@
 import type { SalePayload } from "./api.ts";
 import type { App } from "./app.ts";
-import { makeChange, tallyTotal, toCashCount } from "./money.ts";
+import { tallyTotal, toCashCount } from "./money.ts";
 
 /**
  * 確定ボタンを押した瞬間に、送る中身をすべて決めて送信待ちに入れる。
@@ -16,7 +16,8 @@ export function confirmSale(app: App): void {
 
   const total = app.total;
   const deposit = tallyTotal(app.tender);
-  const change = makeChange(deposit - total);
+  // 画面に出していた組み方と同じものを記録する（レジのお金が足りない金種を避けた組み方）
+  const change = app.planChange(deposit - total).change;
 
   const payload: SalePayload = {
     idempotency_key: crypto.randomUUID(),
