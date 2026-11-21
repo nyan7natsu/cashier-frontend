@@ -2,6 +2,7 @@ import { h, toast } from "../dom.ts";
 import { yen } from "../money.ts";
 import { api, describe, type Mismatch, type Product, type SaleEntry } from "./api.ts";
 import { countForm } from "./count.ts";
+import { download, salesCsv, stamp } from "./csv.ts";
 import type { BackStage } from "./main.ts";
 
 const time = (iso: string) =>
@@ -225,9 +226,11 @@ export function renderSales(app: BackStage): HTMLElement {
   const body = h("div", { class: "page" });
   const list = h("div", { class: "card sales" }, h("p", { class: "muted pad" }, "読み込んでいます…"));
   const summary = h("div", { class: "summary" });
+  let current: { sales: SaleEntry[]; products: Map<number, Product> } | null = null;
 
   async function load(): Promise<void> {
     const data = await loadSales(app);
+    current = data;
     if (!data) {
       list.replaceChildren(h("p", { class: "muted pad" }, "売上の一覧を取れませんでした。"));
       return;
@@ -332,7 +335,27 @@ export function renderSales(app: BackStage): HTMLElement {
       "div",
       { class: "page__head" },
       h("h1", { class: "page__title" }, "売上・取消"),
-      h("button", { class: "btn", type: "button", onclick: () => void load() }, "読み直す"),
+      h(
+        "span",
+        { class: "page__tools" },
+        h("button", { class: "btn", type: "button", onclick: () => void load() }, "読み直す"),
+        h(
+          "button",
+          {
+            class: "btn",
+            type: "button",
+            onclick: async () => {
+              // 押した時点の最新で出す
+              await load();
+              if (!current) return toast("売上の一覧を取れなかったので、書き出せませんでした");
+              if (current.sales.length === 0) return toast("まだ会計がありません");
+              download(`sales_${stamp()}.csv`, salesCsv(current.sales, current.products));
+            },
+          },
+          "CSV で出す",
+        ),
+      ),
+      h("p", { class: "muted" }, "前回の閉局から今までの会計です。CSV は 1 行が 1 品目で、取消した会計も「取消」列に印を付けて入っています。"),
     ),
     summary,
     list,
