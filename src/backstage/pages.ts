@@ -388,7 +388,8 @@ export function renderItems(app: BackStage): HTMLElement {
     for (const p of products) {
       for (const it of p.items ?? []) {
         if (!order.includes(it.product_name)) order.push(it.product_name);
-        usedIn.set(it.product_name, [...(usedIn.get(it.product_name) ?? []), p.name]);
+        const label = p.enabled === false ? `${p.name}（売り止め）` : p.name;
+        usedIn.set(it.product_name, [...(usedIn.get(it.product_name) ?? []), label]);
       }
     }
     for (const name of Object.keys(counts)) if (!order.includes(name)) order.push(name);

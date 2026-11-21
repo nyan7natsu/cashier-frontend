@@ -20,6 +20,8 @@ export type Product = {
   name: string;
   price: number;
   category?: string;
+  /** false なら売り止め */
+  enabled?: boolean;
   /** レシピ（材料と数量） */
   items?: { product_name: string; quantity: number }[];
 };
@@ -98,7 +100,8 @@ async function request<T>(method: "GET" | "POST", path: string, body?: unknown):
 export const api = {
   session: () => request<Session>("GET", "/backstage/discord/session"),
   status: () => request<Status>("GET", "/register/status"),
-  products: () => request<{ products: Product[] }>("GET", "/register/products"),
+  /** 売り止め（enabled: false）の商品も含めて取る。過去の会計の商品名を出すため */
+  products: () => request<{ products: Product[] }>("GET", "/register/products?all=true"),
   sales: () => request<{ sales: SaleEntry[] }>("GET", "/backstage/sales"),
   open: (body: { idempotency_key: string; cash_count: CashCount; ignore_mismatch?: boolean }) =>
     request<{ event_id: number }>("POST", "/backstage/open", body),
