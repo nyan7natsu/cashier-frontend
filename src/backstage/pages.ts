@@ -45,7 +45,7 @@ export function renderHome(app: BackStage): HTMLElement {
           ? h("a", { class: "tile", href: "#/open" }, h("b", null, "開局"), h("span", { class: "muted" }, "釣り銭準備金を数えて、レジを開けます"))
           : null,
         !st || st.is_open
-          ? h("a", { class: "tile", href: "#/x" }, h("b", null, "点検 (X)"), h("span", { class: "muted" }, "レジのお金を数えて、理論在高と合わせます"))
+          ? h("a", { class: "tile", href: "#/x" }, h("b", null, "点検 (X)"), h("span", { class: "muted" }, "今レジにあるお金を数えて、記録しておきます"))
           : null,
         h("a", { class: "tile", href: "#/sales" }, h("b", null, "売上・取消"), h("span", { class: "muted" }, "今日の会計の一覧と集計。打ち間違いの取消（VOID）")),
         h("a", { class: "tile", href: "#/items" }, h("b", null, "材料"), h("span", { class: "muted" }, "これまでに売れた分で、どの材料をどれだけ使ったか")),
@@ -121,15 +121,26 @@ export function renderCount(app: BackStage, kind: "open" | "x"): HTMLElement {
       "数えたお金が合いません",
       h(
         "div",
+        { class: "detail" },
+        h(
+        "div",
         { class: "stats stats--compact" },
         h("div", { class: "stat" }, h("span", { class: "stat__label" }, "実在高"), h("span", { class: "num" }, yen(reported))),
         h("div", { class: "stat" }, h("span", { class: "stat__label" }, "理論在高"), h("span", { class: "num" }, expected === null ? "—" : yen(expected))),
         h("div", { class: "stat is-ng" }, h("span", { class: "stat__label" }, "過不足"), h("span", { class: "num" }, diff === null ? "—" : signed(diff))),
+        ),
+        h(
+          "p",
+          { class: "muted small" },
+          isOpen
+            ? "前回の閉局のときの金額と合いません。数え直すか、このまま開局してください。"
+            : "差を残して点検しても、理論在高は変わりません。差は閉局のときにまとめて精算します。",
+        ),
       ),
       [
         { label: "数え直す" },
         {
-          label: isOpen ? "このまま開局する" : "差を記録して点検する",
+          label: isOpen ? "このまま開局する" : "差を残して点検する",
           danger: true,
           run: () => void submit(true),
         },
@@ -156,6 +167,7 @@ export function renderCount(app: BackStage, kind: "open" | "x"): HTMLElement {
             h("span", { class: "num" }, diff === null ? "—" : signed(diff)),
           ),
         ),
+        !isOpen && diff ? h("p", { class: "muted small" }, "この差は記録として残るだけで、理論在高は変わりません。閉局のときにまとめて精算します。") : null,
         isOpen ? null : salesSummary(),
       ),
     );
@@ -181,7 +193,7 @@ export function renderCount(app: BackStage, kind: "open" | "x"): HTMLElement {
         { class: "muted" },
         isOpen
           ? "釣り銭準備金を金種ごとに数えて入れてください。前回の閉局のときと合わないと、確認が出ます。"
-          : "レジのお金を金種ごとに数えて入れてください。差があれば、記録する前に確認が出ます。",
+          : "今レジにあるお金を金種ごとに数えて記録します。差があっても理論在高は変わらず、閉局のときにまとめて精算します。",
       ),
     ),
     blocked,

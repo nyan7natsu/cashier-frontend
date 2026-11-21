@@ -33,14 +33,14 @@ return json_response({"sales": [e.model_dump(mode="json") for e in sales]})
 - **取消済みの印**: 各会計に `"voided": true/false`。今はこの一覧から、取り消し済みかどうかが分からない。対応する `VoidEvent`（`ref_event_id` が会計の ID）があれば `true`。
 - **担当者の ID**: `operator` を文字列にする（`str(...)`）。Discord の ID は JavaScript の数値では精度が落ちる。画面側でも 16 桁以上の数字は文字列として読むようにしているが、サーバーで文字列にしておくのが確実。
 
-### 2. 点検で、合わないままでも記録できるようにする（必須）
+### 2. 点検は「数えた枚数の記録」だけにする（対応済み）
 
-`POST /api/backstage/x_report` は、合計が合わないと必ず 422 を返す。
-決めたとおり、差があっても記録して、数えた枚数を新しい起点にしたい。
+点検（X）は、今レジにあるお金を数えて記録するだけにする。差があっても精算せず、差の精算は閉局のときに 1 回だけ行う。
 
-- `ignore_mismatch: true` が来たら、422 にせずに記録する
-- そのときは `cash_delta = reported - expected` にする。こうすると、点検のあとも理論在高（`expected_cash()`）と、金種ごとの枚数の合計（`get_cash_count().total()`）が一致する
-- 画面は、合わないとき「差を記録して点検する」で `ignore_mismatch: true` を付けて送り直す（作ってある）
+- `ignore_mismatch: true` なら、合わなくても点検として記録する
+- 点検の `cash_delta` は常に 0。理論在高（`expected_cash()`）は動かさない
+- `get_cash_count()` は、点検（`CashCountEvent`）を起点にせず、開局と閉局だけを起点にする
+- そのため、点検の差は毎回「開局からの理論在高と、今数えた額の差」になる。いったん合わなくても、お金が見つかれば次の点検では ±0 に戻る
 
 ### 3. 同じキーで送り直したら、前回の結果を返す（必須）
 
