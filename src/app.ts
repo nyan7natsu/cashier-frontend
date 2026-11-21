@@ -181,7 +181,7 @@ export class App {
     const before = JSON.stringify([this.operators, this.products]);
     const [ops, prods, threshold] = await Promise.all([
       api.operators(this.password),
-      api.products(this.password),
+      api.products(this.password, this.showAll),
       api.cashThreshold(this.password),
     ]);
     if (threshold.ok) {
@@ -193,7 +193,7 @@ export class App {
       save("operators", JSON.stringify(this.operators));
     }
     if (prods.ok) {
-      this.products = prods.data.products.filter((p) => p.enabled !== false);
+      this.products = prods.data.products.filter((p) => this.showAll || p.enabled !== false);
       save("products", JSON.stringify(this.products));
       this.dropUnavailable();
     }
@@ -202,6 +202,10 @@ export class App {
       else if (ops.ok === false && ops.kind === "network") this.setRegister("offline");
     }
     return JSON.stringify([this.operators, this.products]) !== before;
+  }
+
+  dropUnavailableNow(): void {
+    this.dropUnavailable();
   }
 
   /** 売り止めになって一覧から消えた商品を、選んでいる商品から外す */
@@ -271,6 +275,18 @@ export class App {
     this.password = pw;
     save("password", pw);
     if (pw) this.queue.resume();
+  }
+
+  /**
+   * 特別販売モード: ふだんは出していない商品（enabled: false）も一覧に出して売れるようにする。
+   * 端末ごとに覚える
+   */
+  get showAll(): boolean {
+    return load("show_all") === "1";
+  }
+
+  set showAll(on: boolean) {
+    save("show_all", on ? "1" : null);
   }
 
   get layout(): Layout {
@@ -444,6 +460,11 @@ export class App {
             rejected > 0 ? h("span", { class: "band__count band__count--ng" }, `要確認 ${rejected}`) : null,
           )
         : null;
+    // 特別販売モードの切り忘れに気づけるよう、オンの間は帯に出す（押すとメニュー）
+    const special =
+      showSession && this.showAll
+        ? h("button", { class: "band__counts", onclick: () => this.openMenu() }, h("span", { class: "band__count band__count--special" }, "特別販売"))
+        : null;
 
     this.band.replaceChildren(
       h(
@@ -457,6 +478,7 @@ export class App {
         showSession ? "☰" : "",
       ),
       status,
+      special ?? "",
       counts ?? "",
     );
   }
@@ -464,6 +486,29 @@ export class App {
   // ---------- メニュー ----------
 
   openMenu(): void {
+    const showAllButton = (on: boolean, text: string) =>
+      h(
+        "button",
+        {
+          "aria-pressed": String(this.showAll === on),
+          onclick: async () => {
+            if (this.showAll === on) return;
+            this.showAll = on;
+            // 隠すときは、つながらなくてもすぐ消えるよう、手元の一覧からも外す
+            if (!on) {
+              this.products = this.products.filter((p) => p.enabled !== false);
+              save("products", JSON.stringify(this.products));
+            }
+            this.openMenu();
+            this.lastProductRefresh = Date.now();
+            await this.loadMaster();
+            if (this.screen === "products") this.go("products");
+            if (!on) this.dropUnavailableNow();
+            toast(on ? "特別販売モードにしました。ふだん出していない商品も売れます" : "特別販売モードを終えました");
+          },
+        },
+        text,
+      );
     const layoutButton = (l: Layout, text: string) =>
       h(
         "button",
@@ -555,6 +600,8 @@ export class App {
       h("div", { class: "segmented" }, themeButton("auto", "自動"), themeButton("dark", "暗"), themeButton("light", "明")),
       h("div", { class: "drawer__section" }, "商品の並べ方（縦向き）"),
       h("div", { class: "segmented" }, layoutButton("one", "1 列"), layoutButton("two", "2 列")),
+      h("div", { class: "drawer__section" }, "特別販売モード（ふだん出していない商品も売る）"),
+      h("div", { class: "segmented" }, showAllButton(false, "オフ"), showAllButton(true, "オン")),
       h(
         "div",
         { class: "drawer__foot" },

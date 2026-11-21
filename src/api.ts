@@ -93,8 +93,9 @@ export const api = {
     request<RegisterStatus>("GET", "/register/status", pw),
   operators: (pw: string) =>
     request<{ operators: Operator[] }>("GET", "/register/operators", pw),
-  products: (pw: string) =>
-    request<{ products: Product[] }>("GET", "/register/products", pw),
+  /** all が true なら、売り止め（enabled: false）の商品も含めて返す */
+  products: (pw: string, all = false) =>
+    request<{ products: Product[] }>("GET", all ? "/register/products?all=true" : "/register/products", pw),
   cashThreshold: (pw: string) => request<CashThreshold>("GET", "/cash/threshold", pw),
   sale: (pw: string, payload: SalePayload) =>
     request<{ receipt_id: number }>("POST", "/register/sale", pw, payload, SALE_TIMEOUT_MS),

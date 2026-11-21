@@ -29,6 +29,7 @@ export function renderProducts(app: App): HTMLElement {
           { class: "item__name" },
           h("span", { class: "item__main" }, p.name),
           h("span", { class: "item__sub num" }, yen(p.price)),
+          p.enabled === false ? h("span", { class: "item__tag" }, "特別") : null,
         ),
         qty,
       ),
