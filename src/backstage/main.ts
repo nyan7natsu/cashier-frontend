@@ -1,15 +1,16 @@
 import "./style.css";
 import { h, toast } from "../dom.ts";
 import { api, describe, LOGIN_URL, LOGOUT_URL, type Session, type Status } from "./api.ts";
-import { renderCount, renderHome, renderSales } from "./pages.ts";
+import { renderCount, renderHome, renderItems, renderSales } from "./pages.ts";
 
-export type Page = "home" | "open" | "x" | "sales";
+export type Page = "home" | "open" | "x" | "sales" | "items";
 
 const PAGES: { id: Page; label: string; icon: string }[] = [
   { id: "home", label: "ホーム", icon: "⌂" },
   { id: "open", label: "開局", icon: "↗" },
   { id: "x", label: "点検 (X)", icon: "✓" },
   { id: "sales", label: "売上・取消", icon: "≡" },
+  { id: "items", label: "材料", icon: "◫" },
 ];
 
 /** backstage 全体の状態 */
@@ -113,7 +114,9 @@ export class BackStage {
         ? renderHome(this)
         : page === "sales"
           ? renderSales(this)
-          : renderCount(this, page);
+          : page === "items"
+            ? renderItems(this)
+            : renderCount(this, page);
     this.main.replaceChildren(view);
     this.renderUser();
     this.renderPill();

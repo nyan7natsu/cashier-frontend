@@ -48,6 +48,7 @@ export function renderHome(app: BackStage): HTMLElement {
           ? h("a", { class: "tile", href: "#/x" }, h("b", null, "点検 (X)"), h("span", { class: "muted" }, "レジのお金を数えて、理論在高と合わせます"))
           : null,
         h("a", { class: "tile", href: "#/sales" }, h("b", null, "売上・取消"), h("span", { class: "muted" }, "今日の会計の一覧と集計。打ち間違いの取消（VOID）")),
+        h("a", { class: "tile", href: "#/items" }, h("b", null, "材料"), h("span", { class: "muted" }, "これまでに売れた分で、どの材料をどれだけ使ったか")),
       ),
       h("p", { class: "muted small" }, "閉局と入金・出金は Discord のコマンドで行います。"),
       ),
@@ -323,6 +324,72 @@ export function renderSales(app: BackStage): HTMLElement {
     ),
     summary,
     list,
+  );
+  void load();
+  return body;
+}
+
+// ---------- 材料 ----------
+
+export function renderItems(app: BackStage): HTMLElement {
+  const body = h("div", { class: "page" });
+  const table = h("div", { class: "card items-used" }, h("p", { class: "muted pad" }, "読み込んでいます…"));
+  const updated = h("span", { class: "muted small" });
+
+  async function load(): Promise<void> {
+    const [items, prods] = await Promise.all([api.items(), api.products()]);
+    if (!items.ok) {
+      if (items.kind === "http" && items.status === 401) return app.expired();
+      table.replaceChildren(h("p", { class: "muted pad" }, `材料の集計を取れませんでした。${describe(items)}`));
+      return;
+    }
+    const counts = items.data.item_counts ?? {};
+    const products = prods.ok ? prods.data.products : [];
+
+    // products.yaml に出てくる順に並べる（パン → あん → 飲み物、のように紙の表と揃う）。
+    // どの商品に使われているかも、あわせて出す
+    const order: string[] = [];
+    const usedIn = new Map<string, string[]>();
+    for (const p of products) {
+      for (const it of p.items ?? []) {
+        if (!order.includes(it.product_name)) order.push(it.product_name);
+        usedIn.set(it.product_name, [...(usedIn.get(it.product_name) ?? []), p.name]);
+      }
+    }
+    for (const name of Object.keys(counts)) if (!order.includes(name)) order.push(name);
+
+    updated.textContent = `${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" })} 時点`;
+    if (order.length === 0) {
+      table.replaceChildren(h("p", { class: "muted pad" }, "まだ材料の情報がありません。products.yaml に items を書くと出てきます。"));
+      return;
+    }
+    table.replaceChildren(
+      h("div", { class: "items-used__row items-used__head", "aria-hidden": "true" }, h("span", null, "材料"), h("span", null, "使った量")),
+      ...order.map((name) =>
+        h(
+          "div",
+          { class: `items-used__row${counts[name] ? "" : " is-zero"}` },
+          h(
+            "span",
+            { class: "items-used__name" },
+            h("b", null, name),
+            usedIn.has(name) ? h("span", { class: "muted small" }, usedIn.get(name)!.join("、")) : null,
+          ),
+          h("span", { class: "num items-used__qty" }, (counts[name] ?? 0).toLocaleString("ja-JP")),
+        ),
+      ),
+    );
+  }
+
+  body.append(
+    h(
+      "div",
+      { class: "page__head" },
+      h("h1", { class: "page__title" }, "材料"),
+      h("span", { class: "page__tools" }, updated, h("button", { class: "btn", type: "button", onclick: () => void load() }, "読み直す")),
+      h("p", { class: "muted" }, "これまでに売れた分（取消を除く、全期間）で、各材料をどれだけ使ったかの合計です。数量は products.yaml の items の値をそのまま足しています。"),
+    ),
+    table,
   );
   void load();
   return body;

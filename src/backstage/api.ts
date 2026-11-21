@@ -15,7 +15,14 @@ export type Status = {
   last_event_id: number;
 };
 
-export type Product = { id: number; name: string; price: number; category?: string };
+export type Product = {
+  id: number;
+  name: string;
+  price: number;
+  category?: string;
+  /** レシピ（材料と数量） */
+  items?: { product_name: string; quantity: number }[];
+};
 
 export type SaleItem = { product_id: number; quantity: number; unit_price: number };
 
@@ -97,6 +104,8 @@ export const api = {
     request<{ event_id: number }>("POST", "/backstage/open", body),
   xReport: (body: { idempotency_key: string; cash_count: CashCount; ignore_mismatch?: boolean }) =>
     request<{ event_id: number }>("POST", "/backstage/x_report", body),
+  /** 売れた分の材料の合計（台帳の全期間、取消を除く） */
+  items: () => request<{ item_counts: Record<string, number> }>("GET", "/backstage/items"),
   void: (body: { idempotency_key: string; target_key: string; reason: string }) =>
     request<{ void_event_id: number }>("POST", "/backstage/void", body),
 };

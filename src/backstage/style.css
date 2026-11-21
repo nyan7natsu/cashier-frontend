@@ -749,6 +749,57 @@ button.sales__row:hover {
   text-decoration: none;
 }
 
+/* ---------- 材料 ---------- */
+
+.page__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.items-used__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.items-used__head {
+  border-top: 0;
+  padding-block: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.items-used__head span:last-child {
+  text-align: right;
+}
+
+.items-used__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.items-used__name .small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.items-used__qty {
+  font-size: 20px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.items-used__row.is-zero .items-used__qty {
+  color: var(--muted);
+  font-weight: 400;
+}
+
 /* ---------- ダイアログ・通知 ---------- */
 
 .modal {
