@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <title>レジのリセット</title>
+  <!--
+    端末に保存したレジのアプリ（service worker とキャッシュ）を消して、開き直すページ。
+    /backstage で始まる URL は、どの版の service worker も素通りするので、
+    古い版が入った端末でも、このページは必ずサーバーから読み込まれる。
+    パスワードや送信待ちの会計（localStorage）は消さない。
+  -->
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f0e4;
+      --text: #2b2420;
+      --muted: #6b625a;
+      --accent: #7a2e38;
+      --ng: #a1271b;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0d0c;
+        --text: #f1ebe3;
+        --muted: #a69c91;
+        --accent: #c97a84;
+        --ng: #ff9d92;
+      }
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    }
+
+    main {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: calc(48px + env(safe-area-inset-top)) 20px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    #msg {
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    #msg.ng {
+      color: var(--ng);
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    button,
+    a.btn {
+      min-height: 52px;
+      border-radius: 12px;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-size: 17px;
+      font-weight: 600;
+      display: grid;
+      place-items: center;
+      text-decoration: none;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>レジのリセット</h1>
+    <p id="msg">準備しています…</p>
+    <p class="muted" id="detail">端末に保存したレジのアプリを消して、サーバーから読み直します。パスワードや送信待ちの会計は消えません。</p>
+    <button id="retry" type="button" hidden>もう一度試す</button>
+    <a class="btn" id="back" href="/index.html" hidden>レジに戻る</a>
+  </main>
+
+  <script>
+    (function () {
+      var msg = document.getElementById("msg");
+      var retry = document.getElementById("retry");
+      var back = document.getElementById("back");
+
+      function fail(text) {
+        msg.textContent = text;
+        msg.className = "ng";
+        retry.hidden = false;
+        back.hidden = false;
+      }
+
+      async function run() {
+        retry.hidden = true;
+        back.hidden = true;
+        msg.className = "";
+        msg.textContent = "サーバーを確かめています…";
+
+        // 消したあとにサーバーにつながらないとレジが開けなくなるので、先に確かめる
+        var version = "";
+        try {
+          var res = await fetch("/version.json?t=" + Date.now(), { cache: "no-store" });
+          if (!res.ok) throw new Error(String(res.status));
+          version = (await res.json()).version || "";
+        } catch (e) {
+          fail("サーバーにつながりません。オンラインのときにもう一度試してください（何も消していません）");
+          return;
+        }
+
+        msg.textContent = "保存したアプリを消しています…";
+        try {
+          if ("serviceWorker" in navigator) {
+            var regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }
+          if ("caches" in window) {
+            var keys = await caches.keys();
+            await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }
+        } catch (e) {
+          fail("消している途中でエラーになりました: " + e);
+          return;
+        }
+
+        msg.textContent = "リセットしました。レジを開き直します…";
+        document.getElementById("detail").textContent = version ? "新しい版: " + version : "";
+        setTimeout(function () { location.replace("/index.html"); }, 1200);
+      }
+
+      retry.addEventListener("click", run);
+      run();
+    })();
+  </script>
+</body>
+
+</html>

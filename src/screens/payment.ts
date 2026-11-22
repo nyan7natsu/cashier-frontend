@@ -362,5 +362,42 @@ export function renderPayment(app: App): HTMLElement {
 
   refresh();
   app.onStateChange = refresh;
+
+  // ---- PC のキーボード ----
+  // 数字（テンキーも）で預かりを打つ。Backspace で 1 文字、Delete で全部消す。Enter で確定、Esc で商品に戻る
+  const onKey = (e: KeyboardEvent) => {
+    // この画面から離れたら、聞くのをやめる
+    if (!keys.isConnected) return document.removeEventListener("keydown", onKey);
+    // 値引きや内訳のダイアログを開いているとき、入力欄にいるとき、修飾キー付きのときは何もしない
+    if (document.querySelector("dialog[open]") || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+
+    let pressed: string | null = null;
+    if (/^[0-9]$/.test(e.key)) {
+      typeIn(e.key);
+      pressed = e.key;
+    } else if (e.key === "Backspace") {
+      setInput(app.tenderInput.slice(0, -1));
+      pressed = "⌫";
+    } else if (e.key === "Delete") {
+      setInput("");
+    } else if (e.key === "Enter") {
+      onConfirm();
+    } else if (e.key === "Escape") {
+      app.go("products");
+    } else {
+      return;
+    }
+    e.preventDefault();
+    // 押したキーを画面のキーパッドでも光らせる
+    if (pressed) {
+      const button = [...keys.querySelectorAll<HTMLButtonElement>(".key")].find((b) => b.textContent === pressed);
+      button?.classList.add("is-pressed");
+      window.setTimeout(() => button?.classList.remove("is-pressed"), 120);
+    }
+  };
+  document.addEventListener("keydown", onKey);
+
   return h("div", { class: "screen screen--payment" }, info, keys, foot);
 }

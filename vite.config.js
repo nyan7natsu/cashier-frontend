@@ -58,7 +58,8 @@ export default defineConfig({
             workbox: {
                 globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
                 // backstage は Discord でログインする別の画面なので、レジのキャッシュには入れない
-                globIgnores: ['backstage.html'],
+                // backstage.html と、リセット用のページ（public/backstage/）は端末に保存しない
+                globIgnores: ['backstage.html', 'backstage/**'],
                 // オフラインでも、どの URL で開いてもレジの画面を出す（?pw= 付きでも）
                 navigateFallback: '/index.html',
                 navigateFallbackDenylist: [/^\/api\//, /^\/backstage/],

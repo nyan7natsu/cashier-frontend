@@ -57,10 +57,51 @@ type BarcodeDetectorCtor = {
   getSupportedFormats(): Promise<string[]>;
 };
 
+/** リセット用のページ。/backstage で始まるので、どの版の service worker も素通りする */
+export const RESET_PATH = "/backstage/reset.html";
+
+/** リセット用の QR（…/backstage/reset.html）か */
+export function isResetQr(text: string): boolean {
+  try {
+    return new URL(text.trim(), location.origin).pathname === RESET_PATH;
+  } catch {
+    return false;
+  }
+}
+
+/** リセット用のページへ移る。読んだ QR の行き先ではなく、このサーバーのページを開く */
+export function openReset(): void {
+  location.assign(RESET_PATH);
+}
+
 /**
  * カメラで QR を読み、パスワードが見つかったら返す。閉じられたら null。
+ * リセット用の QR を読んだときは、リセット用のページへ移る
  */
 export function scanPassword(): Promise<string | null> {
+  return scanCode<string>(
+    (text) => {
+      if (isResetQr(text)) {
+        openReset();
+        return null;
+      }
+      return extractPassword(text);
+    },
+    "パスワードの QR コードではないようです",
+  );
+}
+
+/** カメラで QR を読み、リセット用の QR ならリセット用のページへ移る */
+export async function scanReset(): Promise<void> {
+  const ok = await scanCode<true>((text) => (isResetQr(text) ? true : null), "リセット用の QR コードではないようです");
+  if (ok) openReset();
+}
+
+/**
+ * カメラで QR を読む。parse が null 以外を返したら、それを返して閉じる。
+ * 閉じられたら null
+ */
+function scanCode<T>(parse: (text: string) => T | null, wrongMessage: string): Promise<T | null> {
   return new Promise((resolve) => {
     const video = h("video", { class: "scan__video", playsinline: true, muted: true, autoplay: true });
     // iOS は属性で付けないと全画面再生になる
@@ -81,13 +122,13 @@ export function scanPassword(): Promise<string | null> {
     let done = false;
     let lastWrong = "";
 
-    function finish(pw: string | null): void {
+    function finish(value: T | null): void {
       if (done) return;
       done = true;
       stream?.getTracks().forEach((t) => t.stop());
       dialog.close();
       dialog.remove();
-      resolve(pw);
+      resolve(value);
     }
 
     dialog.addEventListener("cancel", (e) => {
@@ -128,11 +169,12 @@ export function scanPassword(): Promise<string | null> {
       while (!done) {
         const text = await detect(video).catch(() => null);
         if (text) {
-          const pw = extractPassword(text);
-          if (pw) return finish(pw);
+          const value = parse(text);
+          if (value !== null) return finish(value);
+          if (isResetQr(text)) return finish(null); // リセット用のページへ移るところ
           if (text !== lastWrong) {
             lastWrong = text;
-            message.textContent = "パスワードの QR コードではないようです";
+            message.textContent = wrongMessage;
           }
         }
         await new Promise((r) => setTimeout(r, 150));

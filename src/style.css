@@ -1491,7 +1491,8 @@ dialog::backdrop {
   transition: transform 0.06s ease;
 }
 
-.key:active {
+.key:active,
+.key.is-pressed {
   transform: scale(0.97);
   background: var(--surface-2);
 }

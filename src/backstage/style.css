@@ -749,6 +749,57 @@ button.sales__row:hover {
   text-decoration: none;
 }
 
+/* ---------- リセット用 QR ---------- */
+
+.reset {
+  padding: 4px 16px;
+}
+
+.reset summary {
+  padding: 10px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.reset__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 4px 0 14px;
+}
+
+.reset__qr {
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.reset__qr svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.reset__text {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reset__text p,
+.reset__text ol {
+  margin: 0;
+}
+
+.reset__text ol {
+  padding-left: 1.3em;
+}
+
 /* ---------- 材料 ---------- */
 
 .page__tools {

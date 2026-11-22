@@ -1,6 +1,7 @@
 import { h, toast } from "../dom.ts";
 import { yen } from "../money.ts";
 import { api, describe, discountOf, type Mismatch, type Product, type SaleEntry } from "./api.ts";
+import qrcode from "qrcode-generator";
 import { countForm } from "./count.ts";
 import { download, salesCsv, stamp } from "./csv.ts";
 import type { BackStage } from "./main.ts";
@@ -52,6 +53,7 @@ export function renderHome(app: BackStage): HTMLElement {
         h("a", { class: "tile", href: "#/items" }, h("b", null, "材料"), h("span", { class: "muted" }, "これまでに売れた分で、どの材料をどれだけ使ったか")),
       ),
       h("p", { class: "muted small" }, "閉局と入金・出金は Discord のコマンドで行います。"),
+      resetQrCard(),
       ),
     );
   };
@@ -59,6 +61,43 @@ export function renderHome(app: BackStage): HTMLElement {
   draw();
   app.onStatus = draw;
   return body;
+}
+
+/**
+ * 端末のリセット用 QR。レジの「リセット用 QR を読み取る」（またはログイン画面の QR 読み取り）で読むと、
+ * 端末に保存したアプリを消して開き直す。Android や PC なら、カメラで読んで開いてもよい
+ */
+function resetQrCard(): HTMLElement {
+  const url = `${location.origin}/backstage/reset.html`;
+  const qr = qrcode(0, "M");
+  qr.addData(url);
+  qr.make();
+  const image = h("div", { class: "reset__qr", "aria-label": "リセット用 QR コード" });
+  // ライブラリが作る SVG（URL から作るので、外から入る文字は含まない）
+  image.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  return h(
+    "details",
+    { class: "card reset" },
+    h("summary", null, "端末のリセット用 QR"),
+    h(
+      "div",
+      { class: "reset__body" },
+      image,
+      h(
+        "div",
+        { class: "reset__text" },
+        h("p", null, "レジの画面が古いままのときや、割引などが反映されないときに使います。"),
+        h(
+          "ol",
+          null,
+          h("li", null, "レジのメニューの「リセット用 QR を読み取る」で、この QR を読む"),
+          h("li", null, "端末に保存したアプリが消えて、最新の版で開き直す"),
+        ),
+        h("p", { class: "muted small" }, "パスワードや送信待ちの会計は消えません。Android や PC なら、カメラで読んで開いても同じです。"),
+        h("p", { class: "muted small" }, url),
+      ),
+    ),
+  );
 }
 
 // ---------- 開局・点検 ----------

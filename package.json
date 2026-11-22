@@ -17,6 +17,7 @@
     "workbox-window": "^7.4.1"
   },
   "dependencies": {
-    "jsqr": "^1.4.0"
+    "jsqr": "^1.4.0",
+    "qrcode-generator": "1.4.4"
   }
 }
