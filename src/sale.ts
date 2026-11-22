@@ -26,7 +26,9 @@ export function confirmSale(app: App): void {
       quantity,
       unit_price: app.products.find((p) => p.id === id)!.price,
     })),
-    discount: app.discount,
+    // 自動割引と、手で入れた値引きの合計
+    discount: app.totalDiscount,
+    discount_ids: app.autoDiscount.applied.flatMap((a) => (a.id === undefined ? [] : Array<number>(a.count).fill(a.id))),
     cash_count: toCashCount(app.tender, change),
     occurred_at: new Date().toISOString(),
     operator,

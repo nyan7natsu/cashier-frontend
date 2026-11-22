@@ -2,6 +2,7 @@ import { api, describeFailure, type CashThreshold, type Operator, type Product }
 import { h, toast } from "./dom.ts";
 import { config } from "./config.ts";
 import { addTally, DENOMS, emptyTally, fromCashCount, planChange, type ChangePlan, type Denom, type Tally } from "./money.ts";
+import { bestDiscount, type DiscountResult, type DiscountRule } from "./pricing.ts";
 import { pwa } from "./pwa.ts";
 import { SaleQueue, type SendOutcome } from "./queue.ts";
 import { load, save } from "./storage.ts";
@@ -26,6 +27,8 @@ export class App {
   operators: Operator[] = parseJson<Operator[]>(load("operators")) ?? [];
   operatorId: string | null = load("operator");
   products: Product[] = parseJson<Product[]>(load("products")) ?? [];
+  /** 自動割引のルール（最後に取れたもの） */
+  discounts: DiscountRule[] = parseJson<DiscountRule[]>(load("discounts")) ?? [];
   /** サーバーが記録しているレジのお金（最後に取れたもの） */
   serverCash: Tally | null = parseJson<Tally>(load("cash"));
   /** サーバーが決めている金種ごとの閾値（最後に取れたもの） */
@@ -178,12 +181,20 @@ export class App {
    */
   async loadMaster(): Promise<boolean> {
     if (!this.password) return false;
-    const before = JSON.stringify([this.operators, this.products]);
-    const [ops, prods, threshold] = await Promise.all([
+    const before = JSON.stringify([this.operators, this.products, this.discounts]);
+    const [ops, prods, threshold, discounts] = await Promise.all([
       api.operators(this.password),
       api.products(this.password, this.showAll),
       api.cashThreshold(this.password),
+      api.discounts(this.password),
     ]);
+    if (discounts.ok && Array.isArray(discounts.data.discounts)) {
+      // 形の合わないもの（take がないなど）は使わない
+      this.discounts = discounts.data.discounts.filter(
+        (d) => d.enabled !== false && typeof d.discount === "number" && Array.isArray(d.take),
+      );
+      save("discounts", JSON.stringify(this.discounts));
+    }
     if (threshold.ok) {
       this.cashThreshold = threshold.data;
       save("cash_threshold", JSON.stringify(threshold.data));
@@ -201,7 +212,7 @@ export class App {
       if (ops.ok === false && ops.kind === "http" && ops.status === 401) this.setRegister("unauthorized");
       else if (ops.ok === false && ops.kind === "network") this.setRegister("offline");
     }
-    return JSON.stringify([this.operators, this.products]) !== before;
+    return JSON.stringify([this.operators, this.products, this.discounts]) !== before;
   }
 
   dropUnavailableNow(): void {
@@ -408,8 +419,18 @@ export class App {
     return sum;
   }
 
+  /** 自動割引（いちばん得になる組み合わせ） */
+  get autoDiscount(): DiscountResult {
+    return bestDiscount(this.cart, this.products, this.discounts);
+  }
+
+  /** 値引きの合計（自動割引 ＋ 手で入れた値引き）。小計を超えない */
+  get totalDiscount(): number {
+    return Math.min(this.subtotal, this.autoDiscount.total + this.discount);
+  }
+
   get total(): number {
-    return Math.max(0, this.subtotal - this.discount);
+    return Math.max(0, this.subtotal - this.totalDiscount);
   }
 
   /** 次の会計に移る */

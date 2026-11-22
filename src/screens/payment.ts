@@ -17,14 +17,15 @@ const MAX_DIGITS = 6;
  */
 export function renderPayment(app: App): HTMLElement {
   // 商品を減らして小計が値引きを下回ったら、値引きを外す（サーバーが 422 を返すので）
-  if (app.discount > app.subtotal) {
+  if (app.discount > app.subtotal - app.autoDiscount.total) {
     app.discount = 0;
     toast("小計が値引きより少なくなったので、値引きを外しました");
   }
 
   // ---- 金額の表示 ----
   const subtotalRow = h("div", { class: "row row--small" }, h("span", { class: "row__label" }, "小計"), h("span", { class: "row__value num" }));
-  const discountRow = h("div", { class: "row row--small" }, h("span", { class: "row__label" }, "値引き"), h("span", { class: "row__value num" }));
+  // 自動割引と、手で入れた値引きを 1 行ずつ出す
+  const discountRows = h("div", { class: "pay__discounts" });
   const totalValue = h("span", { class: "row__value num" });
   const depositLabel = h("span", { class: "row__label" });
   const depositValue = h("span", { class: "row__value num pay__deposit" });
@@ -51,7 +52,7 @@ export function renderPayment(app: App): HTMLElement {
       discountButton,
     ),
     subtotalRow,
-    discountRow,
+    discountRows,
     h("div", { class: "row row--small" }, h("span", { class: "row__label" }, `合計（${app.itemCount}点）`), totalValue),
     h("div", { class: "row" }, depositLabel, h("span", { class: "pay__depositbox" }, clearInput, depositValue)),
     changeBox,
@@ -124,10 +125,15 @@ export function renderPayment(app: App): HTMLElement {
     const deposit = tallyTotal(app.tender);
     const short = deposit < total;
 
-    subtotalRow.hidden = app.discount === 0;
-    discountRow.hidden = app.discount === 0;
+    const auto = app.autoDiscount;
+    subtotalRow.hidden = app.totalDiscount === 0;
     subtotalRow.lastElementChild!.textContent = yen(app.subtotal);
-    discountRow.lastElementChild!.textContent = `−${yen(app.discount)}`;
+    const discountRow = (label: string, amount: number) =>
+      h("div", { class: "row row--small row--discount" }, h("span", { class: "row__label" }, label), h("span", { class: "row__value num" }, `−${yen(amount)}`));
+    discountRows.replaceChildren(
+      ...auto.applied.map((a) => discountRow(a.count > 1 ? `${a.name} ×${a.count}` : a.name, a.amount)),
+      ...(app.discount > 0 ? [discountRow("値引き", app.discount)] : []),
+    );
     discountButton.textContent = app.discount > 0 ? `値引き −${yen(app.discount)}` : "値引き";
     discountButton.classList.toggle("is-set", app.discount > 0);
 
@@ -332,8 +338,9 @@ export function renderPayment(app: App): HTMLElement {
                 error.textContent = "0 以上の整数（円）で入れてください";
                 return;
               }
-              if (n > app.subtotal) {
-                error.textContent = `小計 ${yen(app.subtotal)} より大きくはできません`;
+              const room = app.subtotal - app.autoDiscount.total;
+              if (n > room) {
+                error.textContent = `割引のあとの ${yen(room)} より大きくはできません`;
                 return;
               }
               app.discount = n;

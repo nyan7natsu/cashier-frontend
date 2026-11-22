@@ -1,4 +1,4 @@
-import type { Product, SaleEntry } from "./api.ts";
+import { discountOf, type Product, type SaleEntry } from "./api.ts";
 
 /**
  * 売上履歴を CSV にする。
@@ -14,17 +14,18 @@ export function salesCsv(sales: SaleEntry[], products: Map<number, Product>): st
   for (const s of [...sales].sort((a, b) => a.id - b.id)) {
     const e = s.event;
     const voided = Boolean(s.voided ?? e.voided) ? "取消" : "";
-    const total = e.items.reduce((sum, it) => sum + it.unit_price * it.quantity, 0) - e.discount;
+    const discount = discountOf(e);
+    const total = e.items.reduce((sum, it) => sum + it.unit_price * it.quantity, 0) - discount;
     const base = [s.id, jst(e.occurred_at), voided, String(e.operator)];
     for (const it of e.items) {
       const p = products.get(it.product_id);
       rows.push([...base, it.product_id, p?.name ?? `商品 ${it.product_id}`, p?.category ?? "", it.unit_price, it.quantity, it.unit_price * it.quantity, total]);
     }
-    if (e.discount) rows.push([...base, "", "値引き", "", "", "", -e.discount, total]);
+    if (discount) rows.push([...base, "", "値引き", "", "", "", -discount, total]);
   }
 
   // Excel で文字化けしないよう、先頭に BOM を付け、改行は CRLF にする
-  return "﻿" + [header, ...rows].map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+  return "\ufeff" + [header, ...rows].map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
 }
 
 /** ダウンロードさせる。iPhone の Safari では「ファイル」に保存するか聞かれる */

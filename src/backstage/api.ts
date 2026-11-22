@@ -37,7 +37,8 @@ export type SaleEntry = {
     occurred_at: string;
     operator: string | number;
     items: SaleItem[];
-    discount: number;
+    /** 以前の台帳は数値、今は { discount_price, ids }。discountOf() で読む */
+    discount: number | { discount_price: number; ids?: number[] };
     cash_delta: number;
     cash_count: CashCount;
     voided?: boolean;
@@ -133,4 +134,11 @@ export function describe(r: Exclude<Result<unknown>, { ok: true }>): string {
     default:
       return r.status >= 500 ? `サーバーでエラーが起きました（${r.status}）` : `エラー（${r.status}）`;
   }
+}
+
+/** 会計の値引き額。台帳の古い形（数値）と新しい形（{ discount_price, ids }）の両方を読む */
+export function discountOf(e: SaleEntry["event"]): number {
+  const d = e.discount;
+  if (typeof d === "number") return d;
+  return typeof d?.discount_price === "number" ? d.discount_price : 0;
 }

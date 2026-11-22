@@ -553,6 +553,32 @@ input:focus-visible {
   gap: 8px;
 }
 
+/* 当てはまった自動割引。小豆色の札で並べる */
+.foot__discount {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.foot__discount:empty {
+  display: none;
+}
+
+.foot__discount-item {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--accent-bg);
+  color: var(--accent-text);
+}
+
+.line--discount,
+.row--discount .row__label,
+.row--discount .row__value {
+  color: var(--accent-text);
+}
+
 .foot__sum {
   display: flex;
   align-items: center;

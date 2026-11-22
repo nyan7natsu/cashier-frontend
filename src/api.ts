@@ -1,4 +1,5 @@
 import type { CashCount } from "./money.ts";
+import type { DiscountRule } from "./pricing.ts";
 
 export type Operator = {
   /** Discord の Snowflake。JavaScriptのnumber型では大きな数字を扱うのが難しいのでstring */
@@ -37,6 +38,8 @@ export type SalePayload = {
   idempotency_key: string;
   items: SaleItem[];
   discount: number;
+  /** 使った自動割引の id。同じ割引を 2 回使ったら 2 つ入れる */
+  discount_ids?: number[];
   cash_count: CashCount;
   occurred_at: string;
   operator: string;
@@ -96,6 +99,8 @@ export const api = {
   /** all が true なら、売り止め（enabled: false）の商品も含めて返す */
   products: (pw: string, all = false) =>
     request<{ products: Product[] }>("GET", all ? "/register/products?all=true" : "/register/products", pw),
+  /** 自動割引のルール（有効なものだけ） */
+  discounts: (pw: string) => request<{ discounts: DiscountRule[] }>("GET", "/register/discounts", pw),
   cashThreshold: (pw: string) => request<CashThreshold>("GET", "/cash/threshold", pw),
   sale: (pw: string, payload: SalePayload) =>
     request<{ receipt_id: number }>("POST", "/register/sale", pw, payload, SALE_TIMEOUT_MS),

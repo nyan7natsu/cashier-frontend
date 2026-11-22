@@ -1,6 +1,6 @@
 import { h, toast } from "../dom.ts";
 import { yen } from "../money.ts";
-import { api, describe, type Mismatch, type Product, type SaleEntry } from "./api.ts";
+import { api, describe, discountOf, type Mismatch, type Product, type SaleEntry } from "./api.ts";
 import { countForm } from "./count.ts";
 import { download, salesCsv, stamp } from "./csv.ts";
 import type { BackStage } from "./main.ts";
@@ -285,7 +285,7 @@ export function renderSales(app: BackStage): HTMLElement {
             h("span", { class: "num" }, yen(it.unit_price * it.quantity)),
           ),
         ),
-        s.event.discount ? h("div", { class: "line" }, h("span", null, "値引き"), h("span", { class: "num" }, `−${yen(s.event.discount)}`)) : null,
+        discountOf(s.event) ? h("div", { class: "line" }, h("span", null, "値引き"), h("span", { class: "num" }, `−${yen(discountOf(s.event))}`)) : null,
         h("div", { class: "line line--total" }, h("span", null, "合計"), h("span", { class: "num" }, yen(saleTotal(s)))),
       ),
       voided
@@ -448,7 +448,7 @@ function isVoided(s: SaleEntry): boolean {
 }
 
 function saleTotal(s: SaleEntry): number {
-  return s.event.items.reduce((sum, it) => sum + it.unit_price * it.quantity, 0) - s.event.discount;
+  return s.event.items.reduce((sum, it) => sum + it.unit_price * it.quantity, 0) - discountOf(s.event);
 }
 
 function itemsText(s: SaleEntry, products: Map<number, Product>): string {
@@ -460,7 +460,7 @@ function summaryView(sales: SaleEntry[], products: Map<number, Product>): HTMLEl
   const live = sales.filter((s) => !isVoided(s));
   const voided = sales.filter(isVoided);
   const net = live.reduce((sum, s) => sum + saleTotal(s), 0);
-  const discount = live.reduce((sum, s) => sum + s.event.discount, 0);
+  const discount = live.reduce((sum, s) => sum + discountOf(s.event), 0);
   const byProduct = new Map<number, { qty: number; amount: number }>();
   for (const s of live) {
     for (const it of s.event.items) {

@@ -59,12 +59,15 @@ export function renderProducts(app: App): HTMLElement {
   const count = h("span", null);
   const total = h("span", { class: "foot__total num" });
   const lines = h("div", { class: "lines", hidden: true });
+  // 当てはまった自動割引（選ぶたびに変わる）
+  const discountLine = h("div", { class: "foot__discount", "aria-live": "polite" });
   const toggle = h("button", { class: "link", "aria-expanded": "false", onclick: () => toggleLines() }, count);
 
   const foot = h(
     "div",
     { class: "foot" },
     lines,
+    discountLine,
     h("div", { class: "foot__sum" }, toggle, total),
     h(
       "div",
@@ -116,7 +119,13 @@ export function renderProducts(app: App): HTMLElement {
 
   function refreshFoot(): void {
     count.textContent = `${app.itemCount}点 ${lines.hidden ? "▴" : "▾"} 明細`;
-    total.textContent = yen(app.subtotal);
+    const auto = app.autoDiscount;
+    total.textContent = yen(app.total);
+    discountLine.replaceChildren(
+      ...auto.applied.map((a) =>
+        h("span", { class: "foot__discount-item" }, `${a.name}${a.count > 1 ? ` ×${a.count}` : ""} −${yen(a.amount)}`),
+      ),
+    );
     if (!lines.hidden) drawLines();
   }
 
@@ -133,6 +142,14 @@ export function renderProducts(app: App): HTMLElement {
               h("span", { class: "num" }, yen(p.price * app.qty(p.id))),
             ),
           )),
+      ...app.autoDiscount.applied.map((a) =>
+        h(
+          "div",
+          { class: "line line--discount" },
+          h("span", null, `${a.name}${a.count > 1 ? ` ×${a.count}` : ""}`),
+          h("span", { class: "num" }, `−${yen(a.amount)}`),
+        ),
+      ),
     );
   }
 
