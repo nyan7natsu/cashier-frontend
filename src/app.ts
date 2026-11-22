@@ -4,7 +4,6 @@ import { config } from "./config.ts";
 import { addTally, DENOMS, emptyTally, fromCashCount, planChange, type ChangePlan, type Denom, type Tally } from "./money.ts";
 import { bestDiscount, type DiscountResult, type DiscountRule } from "./pricing.ts";
 import { forceUpdate, pwa } from "./pwa.ts";
-import { scanReset } from "./qr.ts";
 import { SaleQueue, type SendOutcome } from "./queue.ts";
 import { load, save } from "./storage.ts";
 import { renderDone } from "./screens/done.ts";
@@ -668,17 +667,6 @@ export class App {
             },
           },
           "キャッシュを消して読み直す",
-        ),
-        h(
-          "button",
-          {
-            class: "drawer__item",
-            onclick: () => {
-              this.menu.close();
-              void scanReset();
-            },
-          },
-          "リセット用 QR を読み取る",
         ),
       ),
     );

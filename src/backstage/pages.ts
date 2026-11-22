@@ -64,7 +64,7 @@ export function renderHome(app: BackStage): HTMLElement {
 }
 
 /**
- * 端末のリセット用 QR。レジの「リセット用 QR を読み取る」（またはログイン画面の QR 読み取り）で読むと、
+ * 端末のリセット用 QR。レジのパスワード入力画面の「QR コードを読み取る」で読むと、
  * 端末に保存したアプリを消して開き直す。Android や PC なら、カメラで読んで開いてもよい
  */
 function resetQrCard(): HTMLElement {
@@ -90,7 +90,8 @@ function resetQrCard(): HTMLElement {
         h(
           "ol",
           null,
-          h("li", null, "レジのメニューの「リセット用 QR を読み取る」で、この QR を読む"),
+          h("li", null, "レジのメニューの「パスワードを入れ直す」を押す（パスワードは消えません）"),
+          h("li", null, "「QR コードを読み取る」で、この QR を読む"),
           h("li", null, "端末に保存したアプリが消えて、最新の版で開き直す"),
         ),
         h("p", { class: "muted small" }, "パスワードや送信待ちの会計は消えません。Android や PC なら、カメラで読んで開いても同じです。"),

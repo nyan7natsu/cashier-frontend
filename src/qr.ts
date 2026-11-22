@@ -91,12 +91,6 @@ export function scanPassword(): Promise<string | null> {
   );
 }
 
-/** カメラで QR を読み、リセット用の QR ならリセット用のページへ移る */
-export async function scanReset(): Promise<void> {
-  const ok = await scanCode<true>((text) => (isResetQr(text) ? true : null), "リセット用の QR コードではないようです");
-  if (ok) openReset();
-}
-
 /**
  * カメラで QR を読む。parse が null 以外を返したら、それを返して閉じる。
  * 閉じられたら null
