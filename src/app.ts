@@ -3,7 +3,7 @@ import { h, toast } from "./dom.ts";
 import { config } from "./config.ts";
 import { addTally, DENOMS, emptyTally, fromCashCount, planChange, type ChangePlan, type Denom, type Tally } from "./money.ts";
 import { bestDiscount, type DiscountResult, type DiscountRule } from "./pricing.ts";
-import { pwa } from "./pwa.ts";
+import { forceUpdate, pwa } from "./pwa.ts";
 import { SaleQueue, type SendOutcome } from "./queue.ts";
 import { load, save } from "./storage.ts";
 import { renderDone } from "./screens/done.ts";
@@ -29,6 +29,8 @@ export class App {
   products: Product[] = parseJson<Product[]>(load("products")) ?? [];
   /** 自動割引のルール（最後に取れたもの） */
   discounts: DiscountRule[] = parseJson<DiscountRule[]>(load("discounts")) ?? [];
+  /** 割引のルールを最後にサーバーから取れた時刻 */
+  discountsAt: number | null = Number(load("discounts_at")) || null;
   /** サーバーが記録しているレジのお金（最後に取れたもの） */
   serverCash: Tally | null = parseJson<Tally>(load("cash"));
   /** サーバーが決めている金種ごとの閾値（最後に取れたもの） */
@@ -84,6 +86,7 @@ export class App {
     pwa.onChange = () => {
       this.renderBand();
       if (this.menu.open) this.openMenu();
+      this.updateWhenIdle();
     };
     window.addEventListener("online", () => {
       void this.checkStatus();
@@ -194,6 +197,8 @@ export class App {
         (d) => d.enabled !== false && typeof d.discount === "number" && Array.isArray(d.take),
       );
       save("discounts", JSON.stringify(this.discounts));
+      this.discountsAt = Date.now();
+      save("discounts_at", String(this.discountsAt));
     }
     if (threshold.ok) {
       this.cashThreshold = threshold.data;
@@ -232,6 +237,17 @@ export class App {
 
   // ---------- 画面の切り替え ----------
 
+  /**
+   * 新しい版が届いていて、会計の途中でなければ、その場で入れ替える（読み直す）。
+   * 「新しい版にする」を押し忘れて、端末ごとに古い版が残るのを防ぐ
+   */
+  updateWhenIdle(): void {
+    if (!pwa.needRefresh || this.menu.open || this.cart.size > 0 || this.tenderInput !== "") return;
+    if (!["login", "operator", "products", "history", "drawer"].includes(this.screen)) return;
+    save("updated_notice", "1");
+    pwa.update();
+  }
+
   go(screen: Screen): void {
     this.screen = screen;
     this.onStateChange = null;
@@ -257,6 +273,7 @@ export class App {
     })();
     this.main.replaceChildren(view);
     window.scrollTo(0, 0);
+    queueMicrotask(() => this.updateWhenIdle());
   }
 
   /** パスワードを入れ直してもらい、終わったら今の画面に戻る */
@@ -627,6 +644,30 @@ export class App {
         "div",
         { class: "drawer__foot" },
         h("button", { class: "drawer__item", onclick: () => this.askPassword() }, "パスワードを入れ直す"),
+        h(
+          "button",
+          {
+            class: "drawer__item",
+            onclick: async (e: Event) => {
+              const ok = window.confirm(
+                "端末に保存したアプリを消して、サーバーから読み直します。\n" +
+                  "パスワードや送信待ちの会計は消えません。" +
+                  (this.cart.size > 0 ? "\n選んでいる商品は消えます。" : "") +
+                  "\n\n続けますか？",
+              );
+              if (!ok) return;
+              const button = e.currentTarget as HTMLButtonElement;
+              button.disabled = true;
+              button.textContent = "読み直しています…";
+              if ((await forceUpdate()) === "offline") {
+                button.disabled = false;
+                button.textContent = "キャッシュを消して読み直す";
+                toast("サーバーにつながらないので、できませんでした。オンラインのときにもう一度試してください");
+              }
+            },
+          },
+          "キャッシュを消して読み直す",
+        ),
       ),
     );
     if (!this.menu.open) this.menu.showModal();
@@ -651,6 +692,19 @@ export class App {
         ),
       );
     }
+    const hm = (t: number) => new Date(t).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" });
+    items.push(
+      h("div", { class: "drawer__note" }, "今の版", h("span", { class: "num" }, pwa.version)),
+      ...(pwa.needRefresh
+        ? [h("div", { class: "drawer__note is-new" }, "届いている版", h("span", { class: "num" }, pwa.nextVersion ?? "（番号を確認中）"))]
+        : []),
+      h(
+        "div",
+        { class: `drawer__note${this.discountsAt ? "" : " is-warn"}` },
+        "割引のルール",
+        h("span", null, this.discountsAt ? `${this.discounts.length} 件（${hm(this.discountsAt)} に取得）` : "まだ取れていません"),
+      ),
+    );
     items.push(
       h(
         "div",
@@ -713,6 +767,7 @@ export class App {
   }
 
   async checkStatus(): Promise<void> {
+    this.updateWhenIdle();
     if (!this.password) return;
     const r = await api.status(this.password);
     if (r.ok) {

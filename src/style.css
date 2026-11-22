@@ -1362,6 +1362,11 @@ dialog::backdrop {
   border-top: 1px solid var(--border);
 }
 
+.drawer__note.is-new span {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
 .drawer__note.is-warn span {
   color: var(--warn);
   font-weight: 600;
